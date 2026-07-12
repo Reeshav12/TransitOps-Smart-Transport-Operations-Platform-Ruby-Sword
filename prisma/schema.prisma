@@ -1,0 +1,198 @@
+// TransitOps — Smart Transport Operations Platform
+// Prisma schema for SQLite
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// AUTH & RBAC
+// ============================================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String // bcrypt hash
+  roleId    String
+  role      Role     @relation(fields: [roleId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  auditLogs     AuditLog[]
+  notifications Notification[]
+
+  @@index([roleId])
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique // FLEET_MANAGER, DRIVER, SAFETY_OFFICER, FINANCIAL_ANALYST
+  description String?
+  users       User[]
+}
+
+// ============================================================
+// FLEET ENTITIES
+// ============================================================
+
+model Vehicle {
+  id                 String           @id @default(cuid())
+  registrationNumber String           @unique
+  model              String
+  type               String // TRUCK, VAN, BUS, TRAILER, CAR
+  maxLoadCapacity    Float // kg
+  odometer           Float            @default(0)
+  acquisitionCost    Float
+  status             String           @default("Available") // Available, OnTrip, InShop, Retired
+  region             String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  trips            Trip[]
+  maintenanceLogs  MaintenanceLog[]
+  fuelLogs         FuelLog[]
+  expenses         Expense[]
+
+  @@index([status])
+  @@index([type])
+  @@index([region])
+}
+
+model Driver {
+  id              String   @id @default(cuid())
+  name            String
+  licenseNumber   String   @unique
+  licenseCategory String // A, B, C, HEAVY, LIGHT
+  licenseExpiry   DateTime
+  contactNumber   String
+  safetyScore     Int      @default(100) // 0-100
+  status          String   @default("Available") // Available, OnTrip, OffDuty, Suspended
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  trips Trip[]
+
+  @@index([status])
+  @@index([licenseExpiry])
+}
+
+model Trip {
+  id             String   @id @default(cuid())
+  source         String
+  destination    String
+  vehicleId      String
+  vehicle        Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  driverId       String
+  driver         Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  cargoWeight    Float
+  plannedDistance Float
+  actualDistance  Float?
+  fuelConsumed    Float?
+  finalOdometer   Float?
+  status         String   @default("Draft") // Draft, Dispatched, Completed, Cancelled
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  dispatchedAt   DateTime?
+  completedAt    DateTime?
+
+  fuelLogs FuelLog[]
+
+  @@index([vehicleId])
+  @@index([driverId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model MaintenanceLog {
+  id          String    @id @default(cuid())
+  vehicleId   String
+  vehicle     Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  type        String // OIL_CHANGE, TIRE_ROTATION, BRAKE_SERVICE, ENGINE_REPAIR, INSPECTION, OTHER
+  description String?
+  cost        Float
+  status      String    @default("Open") // Open, Closed
+  startDate   DateTime  @default(now())
+  endDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([vehicleId])
+  @@index([status])
+}
+
+model FuelLog {
+  id        String   @id @default(cuid())
+  vehicleId String
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  liters    Float
+  cost      Float
+  odometer  Float
+  date      DateTime @default(now())
+  tripId    String?
+  trip      Trip?    @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([vehicleId])
+  @@index([date])
+  @@index([tripId])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  vehicleId   String
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  type        String // TOLL, MAINTENANCE, REPAIR, INSURANCE, OTHER
+  amount      Float
+  description String?
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([vehicleId])
+  @@index([date])
+  @@index([type])
+}
+
+// ============================================================
+// AUDIT LOG
+// ============================================================
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String // CREATE, UPDATE, DELETE, LOGIN, LOGOUT, DISPATCH, COMPLETE, CANCEL
+  entity    String // Vehicle, Driver, Trip, etc.
+  entityId  String?
+  metadata  String? // JSON string
+  timestamp DateTime @default(now())
+
+  @@index([userId])
+  @@index([entity])
+  @@index([timestamp])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String   // warning, info, danger
+  title       String
+  description String
+  action      String?
+  href        String?
+  isRead      Boolean  @default(false)
+  key         String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([isRead])
+}
