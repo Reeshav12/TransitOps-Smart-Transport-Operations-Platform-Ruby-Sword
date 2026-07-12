@@ -12,6 +12,7 @@ const url = process.env.DATABASE_URL || ''
 if (url.startsWith('libsql://') || url.startsWith('http://') || url.startsWith('https://')) {
   const adapter = new PrismaLibSql({
     url: url,
+    authToken: process.env.DATABASE_AUTH_TOKEN,
   })
   
   // Set to dummy SQLite file path so the query engine validation succeeds

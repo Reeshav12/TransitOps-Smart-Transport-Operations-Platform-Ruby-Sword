@@ -18,6 +18,7 @@ async function main() {
   console.log(`Connecting to Turso database...`);
   const client = createClient({
     url: url as string,
+    authToken: process.env.DATABASE_AUTH_TOKEN,
   });
 
   console.log('Pushing schema to Turso...');
